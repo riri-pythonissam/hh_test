@@ -1,0 +1,104 @@
+1.     Выгрузить число созданных вакансий (в динамике по месяцам), опубликованных в России, в названии которых встречается слово «водитель», предлагающих «Гибкий график» работы, за 2020-2021 годы. Важно, чтобы вакансии на момент сбора данных не были удаленными / заблокированными.
+
+
+SELECT date_format(CAST(creation_time AS timestamp), '%Y-%m') AS month,
+       COUNT(vacancy_id) AS num_vacancies
+FROM vacancy v
+JOIN area a ON v.area_id = a.area_id
+WHERE v.disabled = FALSE
+  AND v.archived = FALSE
+  AND CAST(creation_time AS timestamp) BETWEEN TIMESTAMP '2020-01-01 00:00:00' AND TIMESTAMP '2021-12-31 23:59:59'
+  AND v.name LIKE '%водитель%'
+  AND v.work_schedule = 'Гибкий график'
+  AND a.country_name = 'Россия'
+GROUP BY date_format(CAST(creation_time AS timestamp), '%Y-%m')
+ORDER BY month;
+
+
+2.     Выяснить, в каких регионах РФ (85 штук) выше всего доля вакансий, предлагающих удаленную работу. Вакансии должны быть не заархивированными, не заблокированными и не удаленными, и быть созданными в 2021-2022 годах.
+
+WITH filtered_vacancies AS (
+    SELECT v.vacancy_id, v.area_id
+    FROM vacancy v
+    JOIN area a ON v.area_id = a.area_id
+    WHERE v.archived = FALSE
+      AND v.disabled = FALSE
+      AND CAST(v.creation_time AS timestamp) BETWEEN TIMESTAMP '2021-01-01 00:00:00' AND TIMESTAMP '2022-12-31 23:59:59'
+      AND a.country_name = 'Россия'
+),
+remote_vacancies AS (
+    SELECT v.vacancy_id, v.area_id
+    FROM vacancy v
+    JOIN area a ON v.area_id = a.area_id
+    WHERE v.archived = FALSE
+      AND v.disabled = FALSE
+      AND CAST(v.creation_time AS timestamp) BETWEEN TIMESTAMP '2021-01-01 00:00:00' AND TIMESTAMP '2022-12-31 23:59:59'
+      AND v.work_schedule = 'Удаленная работа'
+      AND a.country_name = 'Россия'
+)
+SELECT a.region_name,
+       COUNT(rv.vacancy_id) * 100.0 / COUNT(fv.vacancy_id) AS remote_job_percentage
+FROM filtered_vacancies fv
+LEFT JOIN remote_vacancies rv ON fv.vacancy_id = rv.vacancy_id
+JOIN area a ON fv.area_id = a.area_id
+GROUP BY a.region_name
+ORDER BY remote_job_percentage DESC;
+
+
+
+
+3.     Подсчитать «вилку» (10,25,50,75 и 90 процентиль) ожидаемых зарплат (в рублях) из московских и питерских резюме, имеющих роль «разработчик» (id роли — 91), по городам и возрастным группам (группы сделать как в примере таблицы ниже, не учитывать резюме без указания даты рождения — такие тоже есть). Возрастные группы считать на дату составления запроса. Резюме должно быть не удалено и иметь статус «завершено». Дополнительно выяснить (при помощи того же запроса) долю резюме по каждой группе, в которых указана ожидаемая зарплата. Пример таблицы, которая должна получиться на выходе:
+
+
+WITH resume_data AS (
+    SELECT r.resume_id,
+           r.area_id,
+           r.compensation * (1 / c.rate) AS compensation_in_rub,
+           r.birth_day,
+           a.area_name AS city,
+           DATE_DIFF('year', CAST(r.birth_day AS date), CURRENT_DATE) AS age
+    FROM resume r
+    JOIN area a ON r.area_id = a.area_id
+    JOIN currency c ON r.currency = c.code
+    WHERE r.disabled = FALSE
+      AND r.is_finished = 1
+      AND ANY(CAST(r.role_id_list AS array(integer))) = 91
+      AND r.birth_day IS NOT NULL
+      AND a.area_name IN ('Москва', 'Санкт-Петербург')
+      AND a.country_name = 'Россия'
+),
+age_groups AS (
+    SELECT city,
+           CASE
+               WHEN age <= 17 THEN '17 лет и младше'
+               WHEN age BETWEEN 18 AND 24 THEN '18–24'
+               WHEN age BETWEEN 25 AND 34 THEN '25–34'
+               WHEN age BETWEEN 35 AND 44 THEN '35–44'
+               WHEN age BETWEEN 45 AND 54 THEN '45–54'
+               ELSE '55 и старше'
+           END AS age_group,
+           compensation_in_rub
+    FROM resume_data
+),
+salary_stats AS (
+    SELECT city,
+           age_group,
+           approx_percentile(compensation_in_rub, 0.1) AS percentile_10,
+           approx_percentile(compensation_in_rub, 0.25) AS percentile_25,
+           approx_percentile(compensation_in_rub, 0.5) AS percentile_50,
+           approx_percentile(compensation_in_rub, 0.75) AS percentile_75,
+           approx_percentile(compensation_in_rub, 0.9) AS percentile_90,
+           COUNT(compensation_in_rub) * 100.0 / COUNT(*) AS salary_provided_ratio
+    FROM age_groups
+    GROUP BY city, age_group
+)
+SELECT city AS "Город",
+       age_group AS "Возрастная группа",
+       salary_provided_ratio AS "Доля резюме с указанной зарплатой",
+       percentile_10 AS "10 процентиль",
+       percentile_25 AS "25 процентиль",
+       percentile_50 AS "50 процентиль (медиана)",
+       percentile_75 AS "75 процентиль",
+       percentile_90 AS "90 процентиль"
+FROM salary_stats
+ORDER BY city, age_group;
