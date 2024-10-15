@@ -1,16 +1,18 @@
 1.     Выгрузить число созданных вакансий (в динамике по месяцам), опубликованных в России, в названии которых встречается слово «водитель», предлагающих «Гибкий график» работы, за 2020-2021 годы. Важно, чтобы вакансии на момент сбора данных не были удаленными / заблокированными.
 
 
-SELECT date_format(CAST(creation_time AS timestamp), '%Y-%m') AS month,
-       COUNT(vacancy_id) AS num_vacancies
+SELECT 
+    date_format(CAST(creation_time AS timestamp), '%Y-%m') AS month
+    ,COUNT(vacancy_id) AS num_vacancies
 FROM vacancy v
 JOIN area a ON v.area_id = a.area_id
-WHERE v.disabled = FALSE
-  AND v.archived = FALSE
-  AND CAST(creation_time AS timestamp) BETWEEN TIMESTAMP '2020-01-01 00:00:00' AND TIMESTAMP '2021-12-31 23:59:59'
-  AND v.name LIKE '%водитель%'
-  AND v.work_schedule = 'Гибкий график'
-  AND a.country_name = 'Россия'
+WHERE 
+    v.disabled = FALSE
+    AND v.archived = FALSE
+    AND CAST(creation_time AS timestamp) BETWEEN TIMESTAMP '2020-01-01 00:00:00' AND TIMESTAMP '2021-12-31 23:59:59'
+    AND v.name LIKE '%водитель%'
+    AND v.work_schedule = 'Гибкий график'
+    AND a.country_name = 'Россия'
 GROUP BY date_format(CAST(creation_time AS timestamp), '%Y-%m')
 ORDER BY month;
 
@@ -18,23 +20,29 @@ ORDER BY month;
 2.     Выяснить, в каких регионах РФ (85 штук) выше всего доля вакансий, предлагающих удаленную работу. Вакансии должны быть не заархивированными, не заблокированными и не удаленными, и быть созданными в 2021-2022 годах.
 
 WITH filtered_vacancies AS (
-    SELECT v.vacancy_id, v.area_id
+    SELECT 
+    	v.vacancy_id
+	,v.area_id
     FROM vacancy v
     JOIN area a ON v.area_id = a.area_id
-    WHERE v.archived = FALSE
-      AND v.disabled = FALSE
-      AND CAST(v.creation_time AS timestamp) BETWEEN TIMESTAMP '2021-01-01 00:00:00' AND TIMESTAMP '2022-12-31 23:59:59'
-      AND a.country_name = 'Россия'
+    WHERE 
+	v.archived = FALSE
+	AND v.disabled = FALSE
+	AND CAST(v.creation_time AS timestamp) BETWEEN TIMESTAMP '2021-01-01 00:00:00' AND TIMESTAMP '2022-12-31 23:59:59'
+	AND a.country_name = 'Россия'
 ),
 remote_vacancies AS (
-    SELECT v.vacancy_id, v.area_id
+    SELECT 
+    	v.vacancy_id
+	,v.area_id
     FROM vacancy v
     JOIN area a ON v.area_id = a.area_id
-    WHERE v.archived = FALSE
-      AND v.disabled = FALSE
-      AND CAST(v.creation_time AS timestamp) BETWEEN TIMESTAMP '2021-01-01 00:00:00' AND TIMESTAMP '2022-12-31 23:59:59'
-      AND v.work_schedule = 'Удаленная работа'
-      AND a.country_name = 'Россия'
+    WHERE 
+        v.archived = FALSE
+        AND v.disabled = FALSE
+        AND CAST(v.creation_time AS timestamp) BETWEEN TIMESTAMP '2021-01-01 00:00:00' AND TIMESTAMP '2022-12-31 23:59:59'
+        AND v.work_schedule = 'Удаленная работа'
+        AND a.country_name = 'Россия'
 )
 SELECT a.region_name,
        COUNT(rv.vacancy_id) * 100.0 / COUNT(fv.vacancy_id) AS remote_job_percentage
@@ -55,12 +63,12 @@ WITH resume_data AS (
     	a.area_name AS city
         ,r.compensation * (1 / c.rate) AS compensation_in_rub
         ,CASE
-		WHEN DATE_DIFF('year', CAST(r.birth_day AS date), CURRENT_DATE) <= 17 THEN '17 лет и младше'
-		WHEN DATE_DIFF('year', CAST(r.birth_day AS date), CURRENT_DATE) BETWEEN 18 AND 24 THEN '18–24'
-		WHEN DATE_DIFF('year', CAST(r.birth_day AS date), CURRENT_DATE) BETWEEN 25 AND 34 THEN '25–34'
-		WHEN DATE_DIFF('year', CAST(r.birth_day AS date), CURRENT_DATE) BETWEEN 35 AND 44 THEN '35–44'
-		WHEN DATE_DIFF('year', CAST(r.birth_day AS date), CURRENT_DATE) BETWEEN 45 AND 54 THEN '45–54'
-		ELSE '55 и старше'
+	    WHEN DATE_DIFF('year', CAST(r.birth_day AS date), CURRENT_DATE) <= 17 THEN '17 лет и младше'
+	    WHEN DATE_DIFF('year', CAST(r.birth_day AS date), CURRENT_DATE) BETWEEN 18 AND 24 THEN '18–24'
+	    WHEN DATE_DIFF('year', CAST(r.birth_day AS date), CURRENT_DATE) BETWEEN 25 AND 34 THEN '25–34'
+	    WHEN DATE_DIFF('year', CAST(r.birth_day AS date), CURRENT_DATE) BETWEEN 35 AND 44 THEN '35–44'
+	    WHEN DATE_DIFF('year', CAST(r.birth_day AS date), CURRENT_DATE) BETWEEN 45 AND 54 THEN '45–54'
+	    ELSE '55 и старше'
 	END AS age_group
     FROM resume r
     JOIN area a ON r.area_id = a.area_id
@@ -74,14 +82,14 @@ WITH resume_data AS (
 	AND a.country_name = 'Россия'
 )
 SELECT 
-	city AS "Город"
-	,age_group AS "Возрастная группа"
-	,COUNT(compensation_in_rub) * 100.0 / COUNT(*) AS "Доля резюме с указанной зарплатой"
-	,approx_percentile(compensation_in_rub, 0.1) AS percentile_10
-	,approx_percentile(compensation_in_rub, 0.25) AS percentile_25
-	,approx_percentile(compensation_in_rub, 0.5) AS percentile_50
-	,approx_percentile(compensation_in_rub, 0.75) AS percentile_75
-	,approx_percentile(compensation_in_rub, 0.9) AS percentile_90
+    city AS "Город"
+    ,age_group AS "Возрастная группа"
+    ,COUNT(compensation_in_rub) * 100.0 / COUNT(*) AS "Доля резюме с указанной зарплатой"
+    ,approx_percentile(compensation_in_rub, 0.1) AS percentile_10
+    ,approx_percentile(compensation_in_rub, 0.25) AS percentile_25
+    ,approx_percentile(compensation_in_rub, 0.5) AS percentile_50
+    ,approx_percentile(compensation_in_rub, 0.75) AS percentile_75
+    ,approx_percentile(compensation_in_rub, 0.9) AS percentile_90
 FROM age_groups
 GROUP BY city, age_group
 ORDER BY city, age_group
