@@ -51,54 +51,38 @@ ORDER BY remote_job_percentage DESC;
 
 
 WITH resume_data AS (
-    SELECT r.resume_id,
-           r.area_id,
-           r.compensation * (1 / c.rate) AS compensation_in_rub,
-           r.birth_day,
-           a.area_name AS city,
-           DATE_DIFF('year', CAST(r.birth_day AS date), CURRENT_DATE) AS age
+    SELECT 
+    	a.area_name AS city
+        ,r.compensation * (1 / c.rate) AS compensation_in_rub
+        ,CASE
+		WHEN DATE_DIFF('year', CAST(r.birth_day AS date), CURRENT_DATE) <= 17 THEN '17 лет и младше'
+		WHEN DATE_DIFF('year', CAST(r.birth_day AS date), CURRENT_DATE) BETWEEN 18 AND 24 THEN '18–24'
+		WHEN DATE_DIFF('year', CAST(r.birth_day AS date), CURRENT_DATE) BETWEEN 25 AND 34 THEN '25–34'
+		WHEN DATE_DIFF('year', CAST(r.birth_day AS date), CURRENT_DATE) BETWEEN 35 AND 44 THEN '35–44'
+		WHEN DATE_DIFF('year', CAST(r.birth_day AS date), CURRENT_DATE) BETWEEN 45 AND 54 THEN '45–54'
+		ELSE '55 и старше'
+	END AS age_group
     FROM resume r
     JOIN area a ON r.area_id = a.area_id
     JOIN currency c ON r.currency = c.code
-    WHERE r.disabled = FALSE
-      AND r.is_finished = 1
-      AND ANY(CAST(r.role_id_list AS array(integer))) = 91
-      AND r.birth_day IS NOT NULL
-      AND a.area_name IN ('Москва', 'Санкт-Петербург')
-      AND a.country_name = 'Россия'
-),
-age_groups AS (
-    SELECT city,
-           CASE
-               WHEN age <= 17 THEN '17 лет и младше'
-               WHEN age BETWEEN 18 AND 24 THEN '18–24'
-               WHEN age BETWEEN 25 AND 34 THEN '25–34'
-               WHEN age BETWEEN 35 AND 44 THEN '35–44'
-               WHEN age BETWEEN 45 AND 54 THEN '45–54'
-               ELSE '55 и старше'
-           END AS age_group,
-           compensation_in_rub
-    FROM resume_data
-),
-salary_stats AS (
-    SELECT city,
-           age_group,
-           approx_percentile(compensation_in_rub, 0.1) AS percentile_10,
-           approx_percentile(compensation_in_rub, 0.25) AS percentile_25,
-           approx_percentile(compensation_in_rub, 0.5) AS percentile_50,
-           approx_percentile(compensation_in_rub, 0.75) AS percentile_75,
-           approx_percentile(compensation_in_rub, 0.9) AS percentile_90,
-           COUNT(compensation_in_rub) * 100.0 / COUNT(*) AS salary_provided_ratio
-    FROM age_groups
-    GROUP BY city, age_group
+    WHERE 
+	r.disabled = FALSE
+	AND r.is_finished = 1
+	AND 91 = ANY(CAST(r.role_id_list AS array(integer))) 
+	AND r.birth_day IS NOT NULL
+	AND a.area_name IN ('Москва', 'Санкт-Петербург')
+	AND a.country_name = 'Россия'
 )
-SELECT city AS "Город",
-       age_group AS "Возрастная группа",
-       salary_provided_ratio AS "Доля резюме с указанной зарплатой",
-       percentile_10 AS "10 процентиль",
-       percentile_25 AS "25 процентиль",
-       percentile_50 AS "50 процентиль (медиана)",
-       percentile_75 AS "75 процентиль",
-       percentile_90 AS "90 процентиль"
-FROM salary_stats
-ORDER BY city, age_group;
+SELECT 
+	city AS "Город"
+	,age_group AS "Возрастная группа"
+	,COUNT(compensation_in_rub) * 100.0 / COUNT(*) AS "Доля резюме с указанной зарплатой"
+	,approx_percentile(compensation_in_rub, 0.1) AS percentile_10
+	,approx_percentile(compensation_in_rub, 0.25) AS percentile_25
+	,approx_percentile(compensation_in_rub, 0.5) AS percentile_50
+	,approx_percentile(compensation_in_rub, 0.75) AS percentile_75
+	,approx_percentile(compensation_in_rub, 0.9) AS percentile_90
+FROM age_groups
+GROUP BY city, age_group
+ORDER BY city, age_group
+
