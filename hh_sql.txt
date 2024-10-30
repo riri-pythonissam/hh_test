@@ -85,11 +85,11 @@ SELECT
     city AS "Город"
     ,age_group AS "Возрастная группа"
     ,COUNT(compensation_in_rub) * 100.0 / COUNT(*) AS "Доля резюме с указанной зарплатой"
-    ,approx_percentile(compensation_in_rub, 0.1) AS percentile_10
-    ,approx_percentile(compensation_in_rub, 0.25) AS percentile_25
-    ,approx_percentile(compensation_in_rub, 0.5) AS percentile_50
-    ,approx_percentile(compensation_in_rub, 0.75) AS percentile_75
-    ,approx_percentile(compensation_in_rub, 0.9) AS percentile_90
+    ,approx_percentile(compensation_in_rub, 0.1) AS "10 процентиль"
+    ,approx_percentile(compensation_in_rub, 0.25) AS "25 процентиль"
+    ,approx_percentile(compensation_in_rub, 0.5) AS "50 процентиль"
+    ,approx_percentile(compensation_in_rub, 0.75) AS "75 процентиль"
+    ,approx_percentile(compensation_in_rub, 0.9) AS "90 процентиль"
 FROM age_groups
 GROUP BY city, age_group
 ORDER BY city, age_group
